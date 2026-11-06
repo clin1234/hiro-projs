@@ -39,7 +39,7 @@ Button A is a single-button Morse key. A press is classified when the button is 
 - Gap of **7 dits or longer**: finish the current character and insert a word space.
 - No new press for **15 dits**: finish the message and send the decoded text over BLE.
 
-The default `DIT_TIME_MS` is 100 ms. Change this one constant to suit the operator; keep it fixed during a message. The same timing unit is used for the RGB LED Morse output. A 25 ms debounce is applied to Button A.
+The default `DIT_TIME_MS` is 100 ms. Change this one constant to suit the operator; keep it fixed during a message. The same timing unit is used for the RGB LED Morse output. A 25 ms debounce is applied to Button A. Button A continues to be sampled while the RGB LED is playing a BLE message.
 
 The decoder uses the same `MORSE_TABLE` as the LED transmitter. Character-to-Morse and Morse-to-character conversion therefore cannot drift apart through separately maintained lookup lists. Unsupported sequences are returned as `?`.
 
