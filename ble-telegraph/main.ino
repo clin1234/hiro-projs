@@ -1,116 +1,183 @@
 #include <Arduino.h>
 #include <BLE.h>
+#include <ctype.h>
 
 // -----------------------------------------------------------------------------
-// MechSoul RGB LED pinout from the supplied manual
+// MechSoul / Raspberry Pi Pico 2 W pinout
 // -----------------------------------------------------------------------------
+
+// RGB LED
 constexpr uint8_t RED_PIN   = 7;
 constexpr uint8_t GREEN_PIN = 6;
 constexpr uint8_t BLUE_PIN  = 8;
 
+// Push buttons (wired active-low; INPUT_PULLUP is enabled in setup()).
+constexpr uint8_t BUTTON_A_PIN = 1;
+constexpr uint8_t BUTTON_B_PIN = 0;
+
+// Ultrasonic distance sensor (reserved for future use).
+constexpr uint8_t ULTRASONIC_TRIG_PIN = 9;
+constexpr uint8_t ULTRASONIC_ECHO_PIN = 22;
+
+// MPU-6050 (reserved for future use).
+constexpr uint8_t MPU6050_SCL_PIN = 17;
+constexpr uint8_t MPU6050_SDA_PIN = 16;
+constexpr uint8_t MPU6050_AD0_PIN = 15;
+constexpr uint8_t MPU6050_INT_PIN = 14;
+
+// Servo outputs (reserved for future use).
+constexpr uint8_t SERVO_LFL_PIN = 18;
+constexpr uint8_t SERVO_LFS_PIN = 19;
+constexpr uint8_t SERVO_LBS_PIN = 20;
+constexpr uint8_t SERVO_LBL_PIN = 21;
+constexpr uint8_t SERVO_RFL_PIN = 13;
+constexpr uint8_t SERVO_RFS_PIN = 12;
+constexpr uint8_t SERVO_RBS_PIN = 11;
+constexpr uint8_t SERVO_RBL_PIN = 10;
+
 // -----------------------------------------------------------------------------
 // Morse timing
 //
-// Standard Morse timing uses:
-//   dot      = 1 unit
-//   dash     = 3 units
-//   symbol   = 1 unit between dots/dashes
-//   letter   = 3 units between letters
-//   word     = 7 units between words
+// Button A is a single-button Morse key:
+//   - release before 2 dits: dit
+//   - hold for at least 2 dits: dah
+//   - release-to-next-press gap of 1 dit: next symbol in the same character
+//   - gap of at least 3 dits: next character
+//   - gap of at least 7 dits: next word
+//   - no new press for 15 dits: finish and send the decoded message
 //
-// Here we use 200 ms as one unit.
+// Tune DIT_TIME_MS to the operator. Keep it constant for a whole message.
+// LED output uses the same unit so the input and output rhythms stay aligned.
 // -----------------------------------------------------------------------------
-constexpr uint16_t DOT_TIME = 100;
-constexpr uint16_t DASH_TIME = DOT_TIME * 3;
+constexpr uint16_t DIT_TIME_MS = 100;
+constexpr uint16_t DASH_PRESS_THRESHOLD_MS = DIT_TIME_MS * 2;
 
-constexpr uint16_t SYMBOL_GAP = DOT_TIME;
-constexpr uint16_t LETTER_GAP = DOT_TIME * 3;
-constexpr uint16_t WORD_GAP   = DOT_TIME * 7;
+constexpr uint32_t LETTER_GAP_MS = DIT_TIME_MS * 3UL;
+constexpr uint32_t WORD_GAP_MS = DIT_TIME_MS * 7UL;
+constexpr uint32_t MESSAGE_TIMEOUT_MS = DIT_TIME_MS * 15UL;
 
-// Green message-complete indication.
-constexpr uint16_t END_FLASH_TIME = 100;
+constexpr uint16_t BUTTON_DEBOUNCE_MS = 25;
+constexpr uint16_t END_FLASH_TIME_MS = 100;
+constexpr size_t MAX_MESSAGE_LENGTH = 6000;
+constexpr size_t MAX_MORSE_SYMBOLS = 8;
+
+// -----------------------------------------------------------------------------
+// One source of truth for both character -> Morse and Morse -> character.
+// -----------------------------------------------------------------------------
+struct MorseEntry {
+  char character;
+  const char *code;
+};
+
+constexpr MorseEntry MORSE_TABLE[] = {
+  {'A', ".-"},
+  {'B', "-..."},
+  {'C', "-.-."},
+  {'D', "-.."},
+  {'E', "."},
+  {'F', "..-."},
+  {'G', "--."},
+  {'H', "...."},
+  {'I', ".."},
+  {'J', ".---"},
+  {'K', "-.-"},
+  {'L', ".-.."},
+  {'M', "--"},
+  {'N', "-."},
+  {'O', "---"},
+  {'P', ".--."},
+  {'Q', "--.-"},
+  {'R', ".-."},
+  {'S', "..."},
+  {'T', "-"},
+  {'U', "..-"},
+  {'V', "...-"},
+  {'W', ".--"},
+  {'X', "-..-"},
+  {'Y', "-.--"},
+  {'Z', "--.."},
+
+  {'0', "-----"},
+  {'1', ".----"},
+  {'2', "..---"},
+  {'3', "...--"},
+  {'4', "....-"},
+  {'5', "....."},
+  {'6', "-...."},
+  {'7', "--..."},
+  {'8', "---.."},
+  {'9', "----."},
+
+  {'.', ".-.-.-"},
+  {',', "--..--"},
+  {'?', "..--.."},
+  {'\'', ".----."},
+  {'!', "-.-.--"},
+  {'/', "-..-."},
+  {'(', "-.--."},
+  {')', "-.--.-"},
+  {'&', ".-..."},
+  {':', "---..."},
+  {';', "-.-.-."},
+  {'=', "-...-"},
+  {'+', ".-.-."},
+  {'-', "-....-"},
+  {'_', "..--.-"},
+  {'"', ".-..-."},
+  {'$', "...-..-"},
+  {'@', ".--.-."}
+};
+
+constexpr size_t MORSE_TABLE_SIZE =
+    sizeof(MORSE_TABLE) / sizeof(MORSE_TABLE[0]);
+
+const char *morseCode(char character)
+{
+  character = static_cast<char>(
+      toupper(static_cast<unsigned char>(character)));
+
+  for (const MorseEntry &entry : MORSE_TABLE) {
+    if (entry.character == character) {
+      return entry.code;
+    }
+  }
+
+  return nullptr;
+}
+
+char characterFromMorse(const String &code)
+{
+  for (const MorseEntry &entry : MORSE_TABLE) {
+    if (code == entry.code) {
+      return entry.character;
+    }
+  }
+
+  // Unknown or malformed sequences are visible instead of silently lost.
+  return '?';
+}
 
 // -----------------------------------------------------------------------------
 // BLE Nordic UART service
 // -----------------------------------------------------------------------------
 BLEServiceUART mechSoulControl;
 
-// Maximum message that can be accumulated before transmission.
-// Increase if you want longer messages.
-constexpr size_t MAX_MESSAGE_LENGTH = 6000;
-
 String receivedMessage;
+String morseBuffer;
+String decodedMessage;
 
 // -----------------------------------------------------------------------------
-// Morse alphabet
+// Button A state
 // -----------------------------------------------------------------------------
-const char *morseCode(char c)
-{
-  switch (c) {
-    case 'A': return ".-";
-    case 'B': return "-...";
-    case 'C': return "-.-.";
-    case 'D': return "-..";
-    case 'E': return ".";
-    case 'F': return "..-.";
-    case 'G': return "--.";
-    case 'H': return "....";
-    case 'I': return "..";
-    case 'J': return ".---";
-    case 'K': return "-.-";
-    case 'L': return ".-..";
-    case 'M': return "--";
-    case 'N': return "-.";
-    case 'O': return "---";
-    case 'P': return ".--.";
-    case 'Q': return "--.-";
-    case 'R': return ".-.";
-    case 'S': return "...";
-    case 'T': return "-";
-    case 'U': return "..-";
-    case 'V': return "...-";
-    case 'W': return ".--";
-    case 'X': return "-..-";
-    case 'Y': return "-.--";
-    case 'Z': return "--..";
-
-    case '0': return "-----";
-    case '1': return ".----";
-    case '2': return "..---";
-    case '3': return "...--";
-    case '4': return "....-";
-    case '5': return ".....";
-    case '6': return "-....";
-    case '7': return "--...";
-    case '8': return "---..";
-    case '9': return "----.";
-
-    case '.': return ".-.-.-";
-    case ',': return "--..--";
-    case '?': return "..--..";
-    case '\'': return ".----.";
-    case '!': return "-.-.--";
-    case '/': return "-..-.";
-    case '(': return "-.--.";
-    case ')': return "-.--.-";
-    case '&': return ".-...";
-    case ':': return "---...";
-    case ';': return "-.-.-.";
-    case '=': return "-...-";
-    case '+': return ".-.-.";
-    case '-': return "-....-";
-    case '_': return "..--.-";
-    case '"': return ".-..-.";
-    case '$': return "...-..-";
-    case '@': return ".--.-.";
-
-    default:
-      return nullptr;
-  }
-}
+bool buttonARawPressed = false;
+bool buttonAStablePressed = false;
+uint32_t buttonALastRawChangeMs = 0;
+uint32_t buttonAPressStartMs = 0;
+uint32_t lastButtonReleaseMs = 0;
+bool hasLastButtonRelease = false;
 
 // -----------------------------------------------------------------------------
-// RGB control
+// RGB LED control
 // -----------------------------------------------------------------------------
 void allOff()
 {
@@ -138,89 +205,213 @@ void greenOn()
 }
 
 // -----------------------------------------------------------------------------
-// Transmit one Morse symbol
+// BLE text -> RGB Morse output
 // -----------------------------------------------------------------------------
 void transmitSymbol(char symbol)
 {
   switch (symbol) {
     case '.':
       redOn();
-      delay(DOT_TIME);
+      delay(DIT_TIME_MS);
       allOff();
       break;
 
     case '-':
       blueOn();
-      delay(DASH_TIME);
+      delay(DIT_TIME_MS * 3UL);
       allOff();
       break;
   }
 
-  delay(SYMBOL_GAP);
+  delay(DIT_TIME_MS);
 }
 
-// -----------------------------------------------------------------------------
-// Transmit one character as Morse
-// -----------------------------------------------------------------------------
-void transmitCharacter(char c)
+void transmitCharacter(char character)
 {
-  if (c == ' ') {
-    // Additional word spacing is handled by transmitMessage().
+  if (character == ' ') {
     return;
   }
 
-  c = toupper(static_cast<unsigned char>(c));
-
-  const char *code = morseCode(c);
-
+  const char *code = morseCode(character);
   if (code == nullptr) {
-    // Unsupported character: ignore it.
     return;
   }
 
-  for (const char *p = code; *p != '\0'; ++p) {
-    transmitSymbol(*p);
+  for (const char *symbol = code; *symbol != '\0'; ++symbol) {
+    transmitSymbol(*symbol);
   }
 }
 
-// -----------------------------------------------------------------------------
-// Transmit the entire message
-// -----------------------------------------------------------------------------
 void transmitMessage(const String &message)
 {
-  Serial.print("Transmitting: ");
+  Serial.print("Transmitting BLE message: ");
   Serial.println(message);
 
   for (size_t i = 0; i < message.length(); ++i) {
-    char c = message[i];
+    const char character = message[i];
 
-    if (c == ' ') {
-      // The previous character already got LETTER_GAP.
-      // Add enough time to make the total word gap 7 units.
-      delay(WORD_GAP - LETTER_GAP);
+    if (character == ' ') {
+      // The previous character already emitted a 3-dit letter gap.
+      delay(WORD_GAP_MS - LETTER_GAP_MS);
       continue;
     }
 
-    transmitCharacter(c);
+    transmitCharacter(character);
 
-    // transmitCharacter() ends with SYMBOL_GAP, so compensate for
-    // that and make the gap between letters 3 units total.
-    delay(LETTER_GAP - SYMBOL_GAP);
+    // transmitSymbol() ended with a 1-dit gap. Add 2 more dits to
+    // make the total inter-character gap equal to 3 dits.
+    delay(LETTER_GAP_MS - DIT_TIME_MS);
   }
 
-  // Entire message has now been transmitted.
   greenOn();
-  delay(END_FLASH_TIME);
+  delay(END_FLASH_TIME_MS);
   allOff();
 
   mechSoulControl.println("Transmission complete.");
+  mechSoulControl.flush();
   Serial.println("Transmission complete.");
 }
 
 // -----------------------------------------------------------------------------
-// Finish a Bluetooth message
+// Button A Morse input -> decoded ASCII text over BLE
 // -----------------------------------------------------------------------------
-void handleReceivedMessage()
+void finishMorseCharacter()
+{
+  if (morseBuffer.length() == 0) {
+    return;
+  }
+
+  const char character = characterFromMorse(morseBuffer);
+  Serial.print("Morse ");
+  Serial.print(morseBuffer);
+  Serial.print(" -> ");
+  Serial.println(character);
+
+  if (decodedMessage.length() < MAX_MESSAGE_LENGTH) {
+    decodedMessage += character;
+  }
+
+  morseBuffer = "";
+}
+
+void appendWordSpace()
+{
+  if (decodedMessage.length() == 0 ||
+      decodedMessage[decodedMessage.length() - 1] == ' ') {
+    return;
+  }
+
+  if (decodedMessage.length() < MAX_MESSAGE_LENGTH) {
+    decodedMessage += ' ';
+  }
+}
+
+void resetMorseInput()
+{
+  morseBuffer = "";
+  decodedMessage = "";
+  hasLastButtonRelease = false;
+  lastButtonReleaseMs = 0;
+}
+
+void finishMorseMessage()
+{
+  finishMorseCharacter();
+
+  if (decodedMessage.length() > 0) {
+    Serial.print("Decoded Button A message: ");
+    Serial.println(decodedMessage);
+
+    // The browser's Nordic UART RX characteristic receives this line.
+    mechSoulControl.println(decodedMessage);
+    mechSoulControl.flush();
+  }
+
+  resetMorseInput();
+}
+
+void onButtonAPressed(uint32_t now)
+{
+  if (hasLastButtonRelease) {
+    const uint32_t gap = now - lastButtonReleaseMs;
+
+    if (gap >= MESSAGE_TIMEOUT_MS) {
+      // A new press after the timeout starts a new message.
+      finishMorseMessage();
+    } else if (gap >= WORD_GAP_MS) {
+      finishMorseCharacter();
+      appendWordSpace();
+    } else if (gap >= LETTER_GAP_MS) {
+      finishMorseCharacter();
+    }
+    // Shorter gaps remain within the current character.
+  }
+
+  buttonAPressStartMs = now;
+}
+
+void onButtonAReleased(uint32_t now)
+{
+  const uint32_t pressDuration = now - buttonAPressStartMs;
+  const char symbol =
+      pressDuration < DASH_PRESS_THRESHOLD_MS ? '.' : '-';
+
+  if (morseBuffer.length() < MAX_MORSE_SYMBOLS) {
+    morseBuffer += symbol;
+  }
+
+  lastButtonReleaseMs = now;
+  hasLastButtonRelease = true;
+
+  Serial.print(symbol == '.' ? "Dit: " : "Dah: ");
+  Serial.println(morseBuffer);
+}
+
+void updateButtonA(uint32_t now)
+{
+  // The board buttons are assumed to connect the GPIO to GND when pressed.
+  const bool rawPressed = digitalRead(BUTTON_A_PIN) == LOW;
+
+  if (rawPressed != buttonARawPressed) {
+    buttonARawPressed = rawPressed;
+    buttonALastRawChangeMs = now;
+  }
+
+  if (static_cast<uint32_t>(now - buttonALastRawChangeMs) <
+      BUTTON_DEBOUNCE_MS) {
+    return;
+  }
+
+  if (buttonAStablePressed == buttonARawPressed) {
+    return;
+  }
+
+  buttonAStablePressed = buttonARawPressed;
+
+  if (buttonAStablePressed) {
+    onButtonAPressed(now);
+  } else {
+    onButtonAReleased(now);
+  }
+}
+
+void processMorseTimeout(uint32_t now)
+{
+  // A held button is still an active transmission, not message silence.
+  if (buttonARawPressed || buttonAStablePressed || !hasLastButtonRelease) {
+    return;
+  }
+
+  if (static_cast<uint32_t>(now - lastButtonReleaseMs) >=
+      MESSAGE_TIMEOUT_MS) {
+    finishMorseMessage();
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Finish a line-delimited BLE message and flash it on the RGB LED.
+// -----------------------------------------------------------------------------
+void handleReceivedBleMessage()
 {
   if (receivedMessage.length() == 0) {
     return;
@@ -230,7 +421,6 @@ void handleReceivedMessage()
   Serial.println(receivedMessage);
 
   transmitMessage(receivedMessage);
-
   receivedMessage = "";
 }
 
@@ -245,23 +435,24 @@ void setup()
   pinMode(RED_PIN, OUTPUT);
   pinMode(GREEN_PIN, OUTPUT);
   pinMode(BLUE_PIN, OUTPUT);
-
   allOff();
 
+  pinMode(BUTTON_A_PIN, INPUT_PULLUP);
+  pinMode(BUTTON_B_PIN, INPUT_PULLUP);
+
   BLE.begin("MechSoul Telegraph");
-  
   BLE.server()->addService(&mechSoulControl);
-
-  // Automatically flush received/transmitted UART data periodically.
   mechSoulControl.setAutoflush(50);
-
   BLE.startAdvertising(true);
 
   Serial.print("BLE MAC: ");
   Serial.println(BLE.address().toString());
 
   Serial.println("MechSoul Telegraph ready.");
-  Serial.println("Send a message over BLE followed by Enter.");
+  Serial.println("BLE text followed by Enter flashes as RGB Morse.");
+  Serial.println("Button A: short press = dit; hold >= 2 dits = dah.");
+  Serial.println("Use 1-dit symbol gaps, 3-dit letter gaps, and 7-dit word gaps.");
+  Serial.println("Button A message is sent after 15 dits of inactivity.");
 }
 
 // -----------------------------------------------------------------------------
@@ -269,20 +460,24 @@ void setup()
 // -----------------------------------------------------------------------------
 void loop()
 {
-  while (mechSoulControl.available()) {
-    char c = static_cast<char>(mechSoulControl.read());
+  const uint32_t now = millis();
 
-    // Treat CR/LF as end-of-message.
-    if (c == '\r' || c == '\n') {
-      handleReceivedMessage();
+  updateButtonA(now);
+  processMorseTimeout(now);
+
+  while (mechSoulControl.available()) {
+    const char character = static_cast<char>(mechSoulControl.read());
+
+    // BLE text commands are still delimited by CR/LF.
+    if (character == '\r' || character == '\n') {
+      handleReceivedBleMessage();
       continue;
     }
 
-    // Store printable characters.
-    if (isPrintable(static_cast<unsigned char>(c))) {
-      if (receivedMessage.length() < MAX_MESSAGE_LENGTH) {
-        receivedMessage += c;
-      }
+    // Only printable ASCII is sent to the RGB Morse transmitter.
+    if (character >= 0x20 && character <= 0x7E &&
+        receivedMessage.length() < MAX_MESSAGE_LENGTH) {
+      receivedMessage += character;
     }
   }
 }
