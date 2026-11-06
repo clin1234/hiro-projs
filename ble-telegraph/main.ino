@@ -167,6 +167,10 @@ String receivedMessage;
 String morseBuffer;
 String decodedMessage;
 
+// Raw input events update the web indicator; character events clear its
+// current Morse buffer once the firmware has decoded the symbol sequence.
+void reportMorseCharacter(char character);
+
 // -----------------------------------------------------------------------------
 // Button A state
 // -----------------------------------------------------------------------------
@@ -300,6 +304,8 @@ void finishMorseCharacter()
   }
 
   const char character = characterFromMorse(morseBuffer);
+  reportMorseCharacter(character);
+
   Serial.print("Morse ");
   Serial.print(morseBuffer);
   Serial.print(" -> ");
@@ -373,6 +379,14 @@ void onButtonAPressed(uint32_t now)
 void reportMorseSymbol(char symbol)
 {
   const char event[] = {'\x1E', 'M', 'O', 'R', 'S', 'E', ':', symbol, '\0'};
+  mechSoulControl.println(event);
+  mechSoulControl.flush();
+}
+
+// A completed character tells the browser to clear the in-progress Morse line.
+void reportMorseCharacter(char character)
+{
+  const char event[] = {'\x1E', 'C', 'H', 'A', 'R', ':', character, '\0'};
   mechSoulControl.println(event);
   mechSoulControl.flush();
 }
