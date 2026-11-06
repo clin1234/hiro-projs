@@ -62,11 +62,17 @@ input[type=checkbox]{accent-color:#0967f6;width:16px;height:16px}
 .receive-actions{display:flex;gap:8px;flex-wrap:wrap}
 .receive-actions button{height:36px;padding:0 13px;font-size:.84rem}
 .meta{display:flex;justify-content:space-between;gap:15px;margin-top:12px;font-size:.82rem;color:#73839e}
-.morse-debug-content{padding-top:14px}
-.morse-debug-content p{color:#63748f;font-size:.88rem;line-height:1.5;margin-bottom:12px}
-.morse-log{margin:0;padding:15px 17px;min-height:112px;max-height:240px;overflow:auto;border:1px solid #d9e4f3;border-radius:10px;background:#f8faff;color:#243854;white-space:pre-wrap;overflow-wrap:anywhere;font:.96rem/1.7 ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace}
-.morse-debug-actions{display:flex;justify-content:flex-end;margin-top:10px}
-.morse-debug-actions button{height:36px;padding:0 13px;font-size:.84rem}
+.morse-debug-content{padding-top:14px;display:grid;gap:12px}
+.morse-debug-content p{color:#63748f;font-size:.88rem;line-height:1.5}
+.morse-live-display{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.morse-indicator{min-width:132px;height:54px;padding:0 22px;border:0;border-radius:12px;color:#fff;font-weight:800;letter-spacing:.1em;box-shadow:0 4px 12px rgba(22,42,73,.16);cursor:default}
+.morse-indicator:disabled{opacity:1;cursor:default;transform:none}
+.morse-indicator.is-dit{background:#d94353;box-shadow:0 4px 12px rgba(217,67,83,.25)}
+.morse-indicator.is-dah{background:#1769dc;box-shadow:0 4px 12px rgba(23,105,220,.25)}
+.morse-indicator.is-pause{background:#278461;box-shadow:0 4px 12px rgba(39,132,97,.22)}
+.morse-state-description{color:#63748f;font-size:.9rem}
+.morse-input-line{height:48px;padding:0 15px;font-family:ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace;font-size:1.15rem;letter-spacing:.16em;background:#f8faff}
+.morse-input-line::placeholder{letter-spacing:normal}
 details{padding:16px 20px}
 summary{font-weight:700;color:#344d72;cursor:pointer}
 .config-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:17px 0 6px}
@@ -116,9 +122,13 @@ footer{text-align:center;color:#7989a1;font-size:.81rem;line-height:1.7;padding:
 <details class="card" id="morseDetails">
 <summary>Received dits and dahs (Button A)</summary>
 <div class="morse-debug-content">
-<p>Each recognized Button A press appears here as it arrives from the Pico. A dit is shown as a dot (.) and a dah as a dash (-). This panel stays collapsed unless opened.</p>
-<pre class="morse-log" id="morseInputLog" role="log" aria-live="polite">Waiting for Button A input...</pre>
-<div class="morse-debug-actions"><button class="muted" id="clearMorse" type="button">Clear symbol log</button></div>
+<p>The indicator flashes red for a dit, blue for a dah, and returns to green during pauses. The current character's Morse sequence appears in the single-line field and clears when the Pico decodes a character.</p>
+<div class="morse-live-display">
+<button class="morse-indicator is-pause" id="morseIndicator" type="button" disabled aria-live="polite">PAUSE</button>
+<span class="morse-state-description" id="morseStateDescription">Waiting for Button A input.</span>
+</div>
+<label class="field-label" for="morseInputLine">Current character (dit / dah sequence)</label>
+<input class="morse-input-line" id="morseInputLine" type="text" readonly spellcheck="false" autocomplete="off" placeholder="Received dits and dahs will appear here..." aria-live="polite">
 </div>
 </details>
 <details class="card" id="settings">
@@ -146,6 +156,8 @@ footer{text-align:center;color:#7989a1;font-size:.81rem;line-height:1.7;padding:
   let sending = false;
   let totalReceived = 0;
   let incomingLineBuffer = '';
+  let morseIndicatorTimer = null;
+  const MORSE_INDICATOR_FLASH_MS = 160;
   const status = el('status');
 
   function setStatus(message, type) {
@@ -196,22 +208,56 @@ footer{text-align:center;color:#7989a1;font-size:.81rem;line-height:1.7;padding:
     el('bytesReceived').textContent = totalReceived + ' bytes received';
     el('lastReceived').textContent = 'Last received at ' + new Date().toLocaleTimeString();
   }
-  function appendMorseSymbol(symbol) {
-    const area = el('morseInputLog');
-    if (area.textContent === 'Waiting for Button A input...') {
-      area.textContent = '';
+  function setMorseIndicator(state, description) {
+    const indicator = el('morseIndicator');
+    indicator.classList.remove('is-dit', 'is-dah', 'is-pause');
+    indicator.classList.add('is-' + state);
+    indicator.textContent = state === 'dit' ? 'DIT' : state === 'dah' ? 'DAH' : 'PAUSE';
+    indicator.setAttribute('aria-label', 'Morse signal: ' + indicator.textContent);
+    el('morseStateDescription').textContent = description;
+  }
+  function returnMorseIndicatorToPause(description = 'Pause between symbols.') {
+    if (morseIndicatorTimer !== null) {
+      window.clearTimeout(morseIndicatorTimer);
+      morseIndicatorTimer = null;
     }
-    area.textContent += (symbol === '.' ? 'DIT   .' : 'DAH   -') + '\n';
-    area.scrollTop = area.scrollHeight;
+    setMorseIndicator('pause', description);
+  }
+  function appendMorseSymbol(symbol) {
+    el('morseInputLine').value += symbol;
+    const state = symbol === '.' ? 'dit' : 'dah';
+    setMorseIndicator(state, symbol === '.' ? 'Dit received.' : 'Dah received.');
+
+    if (morseIndicatorTimer !== null) {
+      window.clearTimeout(morseIndicatorTimer);
+    }
+    morseIndicatorTimer = window.setTimeout(function () {
+      morseIndicatorTimer = null;
+      setMorseIndicator('pause', 'Pause between symbols.');
+    }, MORSE_INDICATOR_FLASH_MS);
   }
   function processIncomingLine(line, byteCount) {
     // Record-separator + MORSE marks a raw Button A keying event.
-    // Keep these events out of the decoded-text terminal.
+    // Record-separator + CHAR marks a completed Morse character.
     const morsePrefix = '\x1EMORSE:';
     if (line.startsWith(morsePrefix)) {
       const symbol = line.slice(morsePrefix.length);
       if (symbol === '.' || symbol === '-') {
         appendMorseSymbol(symbol);
+        return;
+      }
+    }
+
+    const characterPrefix = '\x1ECHAR:';
+    if (line.startsWith(characterPrefix)) {
+      const character = line.slice(characterPrefix.length);
+      if (character.length === 1) {
+        el('morseInputLine').value = '';
+        returnMorseIndicatorToPause(
+          character === '['
+            ? 'Unknown Morse sequence translated; input cleared.'
+            : 'Character ' + character + ' decoded; input cleared.'
+        );
         return;
       }
     }
@@ -377,9 +423,6 @@ footer{text-align:center;color:#7989a1;font-size:.81rem;line-height:1.7;padding:
     totalReceived = 0;
     el('lastReceived').textContent = 'Waiting for data';
     el('bytesReceived').textContent = '0 bytes received';
-  });
-  el('clearMorse').addEventListener('click', function () {
-    el('morseInputLog').textContent = '';
   });
   el('copy').addEventListener('click', async function () {
     try {
