@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#f3f7ff">
+<title>HIRO Projects</title>
+<style>
+:root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:#172744;background:#f4f8ff}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 20% 0%,#e6efff 0,transparent 48%),#f5f8fc}
+main{width:min(880px,calc(100% - 36px));margin:0 auto;padding:76px 0}
+h1{margin:0 0 10px;font-size:clamp(2rem,6vw,3.2rem);letter-spacing:-.045em;color:#10213f}
+.intro{margin:0;color:#62738f;font-size:1.05rem;line-height:1.6}
+.projects{display:grid;gap:16px;margin-top:34px}
+.project{display:flex;align-items:center;gap:18px;padding:23px;background:#fff;border:1px solid #dbe6f6;border-radius:16px;box-shadow:0 5px 22px rgba(28,58,108,.055);text-decoration:none;color:inherit;transition:transform .16s,border-color .16s,box-shadow .16s}
+.project:hover{transform:translateY(-2px);border-color:#a9c9f8;box-shadow:0 9px 28px rgba(28,58,108,.10)}
+.icon{display:grid;place-items:center;flex:0 0 58px;height:58px;border-radius:15px;background:#eaf2ff;color:#1768e8;font-size:1.8rem}
+.project h2{margin:0 0 6px;font-size:1.15rem;color:#16294a}
+.project p{margin:0;color:#667994;line-height:1.5;font-size:.94rem}
+.arrow{margin-left:auto;color:#7d91af;font-size:1.35rem}
+footer{margin-top:38px;color:#8a99ad;font-size:.84rem}
+@media(max-width:520px){main{padding:48px 0}.project{padding:17px;gap:13px}.icon{flex-basis:48px;height:48px}}
+</style>
+</head>
+<body>
+<main>
+  <h1>HIRO Projects</h1>
+  <p class="intro">Hardware experiments and small tools.</p>
+  <section class="projects" aria-label="Projects">
+    <a class="project" href="./ble-telegraph/">
+      <span class="icon" aria-hidden="true">⌁</span>
+      <span>
+        <h2>Bluetooth Telegraph</h2>
+        <p>Connect to the MechSoul Pico 2 W, send ASCII text as RGB Morse, and key Morse with Button A.</p>
+      </span>
+      <span class="arrow" aria-hidden="true">→</span>
+    </a>
+  </section>
+  <footer>HIRO Projects</footer>
+</main>
+</body>
+</html>
