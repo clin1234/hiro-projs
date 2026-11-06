@@ -368,6 +368,15 @@ void onButtonAPressed(uint32_t now)
   buttonAPressStartMs = now;
 }
 
+// Prefix symbol events with ASCII Record Separator so the browser can
+// distinguish raw keying feedback from decoded message text.
+void reportMorseSymbol(char symbol)
+{
+  const char event[] = {'\\x1E', 'M', 'O', 'R', 'S', 'E', ':', symbol, '\\0'};
+  mechSoulControl.println(event);
+  mechSoulControl.flush();
+}
+
 void onButtonAReleased(uint32_t now)
 {
   const uint32_t pressDuration = now - buttonAPressStartMs;
@@ -376,6 +385,7 @@ void onButtonAReleased(uint32_t now)
 
   if (morseBuffer.length() < MAX_MORSE_SYMBOLS) {
     morseBuffer += symbol;
+    reportMorseSymbol(symbol);
   }
 
   lastButtonReleaseMs = now;
