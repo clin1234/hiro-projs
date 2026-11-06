@@ -372,7 +372,7 @@ void onButtonAPressed(uint32_t now)
 // distinguish raw keying feedback from decoded message text.
 void reportMorseSymbol(char symbol)
 {
-  const char event[] = {'\\x1E', 'M', 'O', 'R', 'S', 'E', ':', symbol, '\\0'};
+  const char event[] = {'\x1E', 'M', 'O', 'R', 'S', 'E', ':', symbol, '\0'};
   mechSoulControl.println(event);
   mechSoulControl.flush();
 }
