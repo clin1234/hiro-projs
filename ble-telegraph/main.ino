@@ -325,7 +325,7 @@ void finishMorseMessage()
     Serial.println(decodedMessage);
 
     // The browser's Nordic UART RX characteristic receives this line.
-    mechSoulControl.println(decodedMessage);
+    mechSoulControl.println(decodedMessage.c_str());
     mechSoulControl.flush();
   }
 
