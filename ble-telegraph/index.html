@@ -76,7 +76,7 @@ footer{text-align:center;color:#7989a1;font-size:.81rem;line-height:1.7;padding:
 <section class="card">
 <header>
 <div class="logo" aria-hidden="true"><svg fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" viewBox="0 0 24 24"><path d="m7 7 10 10-5 4V3l5 4L7 17"/></svg></div>
-<div><h1>Bluetooth ASCII Terminal</h1><p class="sub">Scan, connect, and exchange ASCII text over Bluetooth.</p></div>
+<div><h1>Bluetooth ASCII Terminal</h1><p class="sub">Send text over BLE to flash the RGB LED, or key Morse with Button A and receive decoded text.</p></div>
 </header>
 <div class="device-panel">
 <div class="connect-row">
@@ -90,7 +90,7 @@ footer{text-align:center;color:#7989a1;font-size:.81rem;line-height:1.7;padding:
 </div>
 </section>
 <section class="card panel">
-<div class="section-header"><div class="heading"><span class="section-icon" aria-hidden="true">↗</span><div><h2>Send text to Bluetooth device</h2><p class="panel-description">Only 7-bit ASCII characters (0–127) are transmitted.</p></div></div><span class="hint">ASCII only</span></div>
+<div class="section-header"><div class="heading"><span class="section-icon" aria-hidden="true">↗</span><div><h2>Send text to Bluetooth device</h2><p class="panel-description">Only 7-bit ASCII characters (0–127) are sent to the Pico and flashed using the RGB LED.</p></div></div><span class="hint">ASCII only</span></div>
 <label class="field-label" for="outgoing">Editable outgoing message</label>
 <textarea id="outgoing" spellcheck="false" autocapitalize="off" autocomplete="off" placeholder="Type ASCII text here...&#10;Example: HELLO, DEVICE!"></textarea>
 <div class="send-row">
@@ -100,7 +100,7 @@ footer{text-align:center;color:#7989a1;font-size:.81rem;line-height:1.7;padding:
 <p id="feedback" class="inline-feedback" role="status" aria-live="polite"></p>
 </section>
 <section class="card panel">
-<div class="section-header"><div class="heading"><span class="section-icon" aria-hidden="true" style="color:#009c7b">▣</span><div><h2>Received text from Bluetooth</h2><p class="panel-description">Incoming ASCII data appears below in real time.</p></div></div><div class="receive-actions"><button class="muted" id="copy" type="button">Copy</button><button class="muted" id="clearRx" type="button">Clear</button></div></div>
+<div class="section-header"><div class="heading"><span class="section-icon" aria-hidden="true" style="color:#009c7b">▣</span><div><h2>Received text from Bluetooth</h2><p class="panel-description">Decoded characters keyed with Button A appear here after 15 dits of inactivity.</p></div></div><div class="receive-actions"><button class="muted" id="copy" type="button">Copy</button><button class="muted" id="clearRx" type="button">Clear</button></div></div>
 <label class="field-label" for="received">Read-only incoming text</label>
 <textarea id="received" readonly spellcheck="false" placeholder="Received text will appear here..."></textarea>
 <div class="meta"><span id="lastReceived">Waiting for data</span><span id="bytesReceived">0 bytes received</span></div>
@@ -115,7 +115,7 @@ footer{text-align:center;color:#7989a1;font-size:.81rem;line-height:1.7;padding:
 </div>
 <p class="tips">The page sends messages in 20-byte chunks for compatibility with small BLE MTUs. Actual BLE behavior depends on your peripheral's GATT implementation.</p>
 </details>
-<footer>Requires a secure HTTPS page and a Web Bluetooth-capable browser for real BLE hardware. Chrome and Edge are recommended. The demo simulates device responses.</footer>
+<footer>Button A: short press = dit; hold for at least 2 dits = dah. Use 3-dit letter gaps and 7-dit word gaps. A message is sent after 15 dits of inactivity. Requires HTTPS and a Web Bluetooth-capable browser for hardware; the demo simulates replies.</footer>
 </main>
 <script>
 'use strict';
