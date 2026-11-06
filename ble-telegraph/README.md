@@ -48,7 +48,8 @@ The decoder uses the same `MORSE_TABLE` as the LED transmitter. Character-to-Mor
 The sketch exposes the Nordic UART Service through `BLEServiceUART`.
 
 - Text received over BLE, terminated by CR or LF, is flashed with the RGB LED: red for a dit, blue for a dah, and green when playback completes.
-- Every accepted Button A dit/dah is also sent immediately over the Nordic UART TX characteristic as a line containing the ASCII Record Separator (0x1E), `MORSE:`, and the symbol (`.` or `-`). The web page uses this marker to distinguish raw key events from ordinary received text.
+- Every accepted Button A dit/dah is sent immediately over the Nordic UART TX characteristic as a line containing the ASCII Record Separator (0x1E), `MORSE:`, and the symbol (`.` or `-`).
+- When the firmware translates the buffered symbols into a character, it sends a second event line containing the Record Separator, `CHAR:`, and the decoded character. The web page uses this event to clear the current Morse sequence field. Unknown sequences send the firmware's `[` fallback character as the same event.
 - Morse entered with Button A is decoded and sent back over the Nordic UART TX characteristic after 15 dits of inactivity.
-- The web terminal in `index.html` can send text to the Pico, display decoded Button A messages, and show the incoming dits/dahs in a collapsed **Received dits and dahs** details panel.
+- The collapsed **Received dits and dahs** panel in `index.html` contains a colored signal button (red for dit, blue for dah, green for pause) and a single-line field showing the current character's Morse sequence. The signal button briefly shows each received symbol before returning to its pause color.
 
