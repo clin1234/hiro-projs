@@ -178,6 +178,23 @@ uint32_t buttonAPressStartMs = 0;
 uint32_t lastButtonReleaseMs = 0;
 bool hasLastButtonRelease = false;
 
+// Forward declarations used while the RGB LED transmitter is active.
+void updateButtonA(uint32_t now);
+void processMorseTimeout(uint32_t now);
+
+// Keep Button A responsive during LED playback instead of blocking in delay().
+void delayWithButtonPolling(uint32_t durationMs)
+{
+  const uint32_t startedAt = millis();
+
+  while (static_cast<uint32_t>(millis() - startedAt) < durationMs) {
+    const uint32_t now = millis();
+    updateButtonA(now);
+    processMorseTimeout(now);
+    delay(1);
+  }
+}
+
 // -----------------------------------------------------------------------------
 // RGB LED control
 // -----------------------------------------------------------------------------
@@ -214,18 +231,18 @@ void transmitSymbol(char symbol)
   switch (symbol) {
     case '.':
       redOn();
-      delay(DIT_TIME_MS);
+      delayWithButtonPolling(DIT_TIME_MS);
       allOff();
       break;
 
     case '-':
       blueOn();
-      delay(DIT_TIME_MS * 3UL);
+      delayWithButtonPolling(DIT_TIME_MS * 3UL);
       allOff();
       break;
   }
 
-  delay(DIT_TIME_MS);
+  delayWithButtonPolling(DIT_TIME_MS);
 }
 
 void transmitCharacter(char character)
@@ -254,7 +271,7 @@ void transmitMessage(const String &message)
 
     if (character == ' ') {
       // The previous character already emitted a 3-dit letter gap.
-      delay(WORD_GAP_MS - LETTER_GAP_MS);
+      delayWithButtonPolling(WORD_GAP_MS - LETTER_GAP_MS);
       continue;
     }
 
@@ -262,11 +279,11 @@ void transmitMessage(const String &message)
 
     // transmitSymbol() ended with a 1-dit gap. Add 2 more dits to
     // make the total inter-character gap equal to 3 dits.
-    delay(LETTER_GAP_MS - DIT_TIME_MS);
+    delayWithButtonPolling(LETTER_GAP_MS - DIT_TIME_MS);
   }
 
   greenOn();
-  delay(END_FLASH_TIME_MS);
+  delayWithButtonPolling(END_FLASH_TIME_MS);
   allOff();
 
   mechSoulControl.println("Transmission complete.");
