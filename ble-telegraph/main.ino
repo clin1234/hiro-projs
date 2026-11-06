@@ -155,8 +155,7 @@ char characterFromMorse(const String &code)
     }
   }
 
-  // Unknown or malformed sequences are visible instead of silently lost.
-  return '?';
+  return '[';
 }
 
 // -----------------------------------------------------------------------------
