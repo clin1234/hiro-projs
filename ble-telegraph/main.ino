@@ -136,7 +136,8 @@ const char *morseCode(char character)
   character = static_cast<char>(
       toupper(static_cast<unsigned char>(character)));
 
-  for (const MorseEntry &entry : MORSE_TABLE) {
+  for (size_t i = 0; i < MORSE_TABLE_SIZE; ++i) {
+    const MorseEntry &entry = MORSE_TABLE[i];
     if (entry.character == character) {
       return entry.code;
     }
@@ -147,7 +148,8 @@ const char *morseCode(char character)
 
 char characterFromMorse(const String &code)
 {
-  for (const MorseEntry &entry : MORSE_TABLE) {
+  for (size_t i = 0; i < MORSE_TABLE_SIZE; ++i) {
+    const MorseEntry &entry = MORSE_TABLE[i];
     if (code == entry.code) {
       return entry.character;
     }
