@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#f3f7ff">
+<title>Bluetooth ASCII Terminal</title>
+<style>
+:root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:#13233f;background:#f4f8ff;font-synthesis:none}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 20% 0%,#e6efff 0,transparent 45%),#f5f8fc}
+main{max-width:1160px;margin:0 auto;padding:28px 22px 46px}
+.card{background:#fff;border:1px solid #dbe6f6;border-radius:16px;box-shadow:0 5px 22px rgba(28,58,108,.055);margin-bottom:20px}
+header{display:flex;align-items:center;gap:18px;padding:26px 28px 22px;background:linear-gradient(115deg,#f9fcff,#f0f6ff)}
+.logo{display:grid;place-items:center;width:72px;height:72px;border-radius:18px;color:white;background:linear-gradient(150deg,#2681ff,#0761ec);flex-shrink:0}
+.logo svg{width:37px;height:37px}
+h1{font-size:clamp(1.55rem,3.4vw,2.45rem);letter-spacing:-.035em;line-height:1.13;margin:0 0 8px;color:#0c1c3b}
+h2{font-size:1.2rem;letter-spacing:-.02em;margin:0;color:#14213d}
+p{margin:0}.sub{color:#61728f;font-size:1.05rem;line-height:1.5}
+.device-panel{padding:24px 26px}
+.connect-row{display:flex;align-items:end;gap:13px;flex-wrap:wrap}
+.device-field{flex:1 1 210px;min-width:180px}
+.device-selection{display:flex;align-items:center;min-height:48px;color:#425b80;font-weight:600;font-size:.94rem;word-break:break-word}
+.device-selection.selected{color:#1667d5}
+.field-label{display:block;font-size:.87rem;font-weight:700;color:#233556;margin-bottom:9px}
+select,textarea,input[type=text]{width:100%;border:1px solid #c9d7eb;border-radius:10px;background:white;color:#172a47;font:inherit;outline-offset:2px}
+select,input[type=text]{height:48px;padding:0 15px}
+select:focus,textarea:focus,input[type=text]:focus{outline:2px solid #2c77ff;border-color:#2c77ff}
+button{height:48px;border:0;border-radius:10px;padding:0 19px;font:700 .96rem inherit;cursor:pointer;white-space:nowrap;transition:background .16s,transform .16s}
+button:active{transform:translateY(1px)}
+button:disabled{opacity:.47;cursor:not-allowed;transform:none}
+.primary{background:#0967f6;color:white;box-shadow:0 3px 8px rgba(10,101,240,.16)}
+.primary:hover:not(:disabled){background:#0056da}
+.secondary{background:#eaf1ff;color:#145bd2;border:1px solid #d4e4ff}
+.secondary:hover:not(:disabled){background:#dbe9ff}
+.muted{background:#f2f5fa;color:#314569;border:1px solid #dce5f0}
+.muted:hover:not(:disabled){background:#e8eef7}
+.status{display:flex;align-items:center;gap:10px;min-height:48px;margin-left:auto;padding:0 3px;font-size:.93rem;white-space:nowrap;color:#33445e}
+.dot{height:12px;width:12px;border-radius:50%;background:#f45c71;box-shadow:0 0 0 4px #ffecf0}
+.status.connected .dot{background:#16a36e;box-shadow:0 0 0 4px #e4f8ec}
+.status.demo .dot{background:#347af1;box-shadow:0 0 0 4px #e7f0ff}
+.status.connecting .dot{background:#efa63d;box-shadow:0 0 0 4px #fff5e3}
+.tips{color:#63748f;font-size:.86rem;line-height:1.55;margin-top:15px}
+.tips strong{color:#344965}
+.panel{padding:24px 26px 27px}
+.section-header{display:flex;align-items:flex-start;justify-content:space-between;gap:15px;margin-bottom:18px}
+.heading{display:flex;align-items:flex-start;gap:14px}
+.section-icon{font-size:1.7rem;line-height:1.1;user-select:none}
+.panel-description{margin-top:5px;font-size:.93rem;color:#687996}
+.hint{color:#6a7a98;font-size:.87rem;white-space:nowrap}
+textarea{resize:vertical;min-height:180px;padding:18px 19px;line-height:1.6;font-family:ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace;font-size:1rem;display:block}
+textarea::placeholder{color:#92a1b7}
+#received{background:#f8faff;min-height:200px;color:#243854}
+.send-row{display:flex;gap:14px;align-items:center;justify-content:space-between;margin-top:15px;flex-wrap:wrap}
+.send-tools{display:flex;align-items:center;gap:18px;flex-wrap:wrap;color:#63748f;font-size:.87rem}
+label.check{display:flex;gap:8px;align-items:center;cursor:pointer}
+input[type=checkbox]{accent-color:#0967f6;width:16px;height:16px}
+.actions{display:flex;gap:9px;flex-wrap:wrap}
+.inline-feedback{min-height:23px;color:#526983;font-size:.86rem;margin-top:12px}
+.inline-feedback.error{color:#b62743}
+.inline-feedback.ok{color:#11734f}
+.receive-actions{display:flex;gap:8px;flex-wrap:wrap}
+.receive-actions button{height:36px;padding:0 13px;font-size:.84rem}
+.meta{display:flex;justify-content:space-between;gap:15px;margin-top:12px;font-size:.82rem;color:#73839e}
+details{padding:16px 20px}
+summary{font-weight:700;color:#344d72;cursor:pointer}
+.config-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:17px 0 6px}
+.config-grid label{font-size:.8rem;font-weight:700;word-break:break-word;color:#526886}
+.config-grid input{font-family:ui-monospace,Consolas,monospace;font-size:.83rem;margin-top:8px;height:43px}
+footer{text-align:center;color:#7989a1;font-size:.81rem;line-height:1.7;padding:5px 12px}
+@media(max-width:680px){main{padding:14px 12px 26px}header,.panel,.device-panel{padding:19px 17px}.logo{width:55px;height:55px;border-radius:14px}.logo svg{height:29px;width:29px}.sub{font-size:.9rem}.device-field{flex-basis:100%}button{flex:1 1 auto}.status{margin-left:0;width:100%;justify-content:flex-start}.section-header{flex-direction:column}.hint{display:none}.config-grid{grid-template-columns:1fr}h2{font-size:1.09rem}.send-row{align-items:stretch}.actions{width:100%}.actions button{flex:1}.receive-actions button{flex:0 1 auto}}
+</style>
+</head>
+<body>
+<main>
+<section class="card">
+<header>
+<div class="logo" aria-hidden="true"><svg fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" viewBox="0 0 24 24"><path d="m7 7 10 10-5 4V3l5 4L7 17"/></svg></div>
+<div><h1>Bluetooth ASCII Terminal</h1><p class="sub">Scan, connect, and exchange ASCII text over Bluetooth.</p></div>
+</header>
+<div class="device-panel">
+<div class="connect-row">
+<div class="device-field"><span class="field-label">Selected Bluetooth device</span><div id="selectedDeviceName" class="device-selection" aria-live="polite">No device selected</div></div>
+<button id="scan" class="primary" type="button">⌕ &nbsp;Scan</button>
+<button id="connect" class="secondary" type="button" disabled>Connect</button>
+<button id="demo" class="muted" type="button">Try demo</button>
+<div id="status" class="status" role="status" aria-live="polite"><span class="dot"></span><span id="statusText">Disconnected</span></div>
+</div>
+<p class="tips" id="browserTip"><strong>Scan</strong> shows only BLE devices advertising the configured Nordic UART Service UUID, regardless of device name. Disconnect your Android phone from the Pico before scanning. <strong>Append LF</strong> is enabled for line-delimited messages.</p>
+</div>
+</section>
+<section class="card panel">
+<div class="section-header"><div class="heading"><span class="section-icon" aria-hidden="true">↗</span><div><h2>Send text to Bluetooth device</h2><p class="panel-description">Only 7-bit ASCII characters (0–127) are transmitted.</p></div></div><span class="hint">ASCII only</span></div>
+<label class="field-label" for="outgoing">Editable outgoing message</label>
+<textarea id="outgoing" spellcheck="false" autocapitalize="off" autocomplete="off" placeholder="Type ASCII text here...&#10;Example: HELLO, DEVICE!"></textarea>
+<div class="send-row">
+<div class="send-tools"><label class="check"><input type="checkbox" id="appendNewline" checked> Append LF (\n)</label><span id="charCount">0 characters</span></div>
+<div class="actions"><button class="muted" type="button" id="clearSend">Clear</button><button class="primary" type="button" id="send" disabled>➤ &nbsp;Send</button></div>
+</div>
+<p id="feedback" class="inline-feedback" role="status" aria-live="polite"></p>
+</section>
+<section class="card panel">
+<div class="section-header"><div class="heading"><span class="section-icon" aria-hidden="true" style="color:#009c7b">▣</span><div><h2>Received text from Bluetooth</h2><p class="panel-description">Incoming ASCII data appears below in real time.</p></div></div><div class="receive-actions"><button class="muted" id="copy" type="button">Copy</button><button class="muted" id="clearRx" type="button">Clear</button></div></div>
+<label class="field-label" for="received">Read-only incoming text</label>
+<textarea id="received" readonly spellcheck="false" placeholder="Received text will appear here..."></textarea>
+<div class="meta"><span id="lastReceived">Waiting for data</span><span id="bytesReceived">0 bytes received</span></div>
+</section>
+<details class="card" id="settings">
+<summary>Advanced BLE characteristic settings</summary>
+<p class="tips">Defaults use the Nordic UART Service (NUS). Change these UUIDs to match your device's firmware, then scan again. This page does not support Bluetooth Classic SPP.</p>
+<div class="config-grid">
+<label>Service UUID<input type="text" id="serviceUuid" value="6e400001-b5a3-f393-e0a9-e50e24dcca9e" spellcheck="false"></label>
+<label>Write characteristic UUID<input type="text" id="writeUuid" value="6e400002-b5a3-f393-e0a9-e50e24dcca9e" spellcheck="false"></label>
+<label>Notify characteristic UUID<input type="text" id="notifyUuid" value="6e400003-b5a3-f393-e0a9-e50e24dcca9e" spellcheck="false"></label>
+</div>
+<p class="tips">The page sends messages in 20-byte chunks for compatibility with small BLE MTUs. Actual BLE behavior depends on your peripheral's GATT implementation.</p>
+</details>
+<footer>Requires a secure HTTPS page and a Web Bluetooth-capable browser for real BLE hardware. Chrome and Edge are recommended. The demo simulates device responses.</footer>
+</main>
+<script>
+'use strict';
+(function () {
+  const el = (id) => document.getElementById(id);
+  let selectedDevice = null;
+  let currentDevice = null;
+  let server = null;
+  let writeCharacteristic = null;
+  let notifyCharacteristic = null;
+  let inDemo = false;
+  let sending = false;
+  let totalReceived = 0;
+  const status = el('status');
+
+  function setStatus(message, type) {
+    status.className = 'status' + (type ? ' ' + type : '');
+    el('statusText').textContent = message;
+  }
+  function notice(message, type) {
+    const p = el('feedback');
+    p.textContent = message;
+    p.className = 'inline-feedback' + (type ? ' ' + type : '');
+  }
+  function isLive() {
+    return Boolean(currentDevice && server && server.connected && writeCharacteristic);
+  }
+  function refreshButtons() {
+    const connected = isLive();
+    el('connect').disabled = !connected && (!selectedDevice || inDemo);
+    el('connect').textContent = connected ? 'Disconnect' : 'Connect';
+    el('selectedDeviceName').textContent = selectedDevice ? (selectedDevice.name || 'Selected device') : 'No device selected';
+    el('selectedDeviceName').classList.toggle('selected', Boolean(selectedDevice));
+    el('send').disabled = sending || (!connected && !inDemo);
+    el('demo').textContent = inDemo ? 'Exit demo' : 'Try demo';
+    el('serviceUuid').disabled = connected;
+    el('writeUuid').disabled = connected;
+    el('notifyUuid').disabled = connected;
+  }
+  function errorMessage(error) {
+    return error && error.message ? error.message : String(error);
+  }
+  function updateCount() {
+    const text = el('outgoing').value;
+    const ascii = /^[\x00-\x7f]*$/.test(text);
+    el('charCount').textContent = text.length + ' characters' + (ascii ? '' : ' · contains non-ASCII');
+    el('charCount').style.color = ascii ? '' : '#b62743';
+  }
+  function readBytes(bytes) {
+    let str = '';
+    for (const byte of bytes) {
+      str += byte <= 127 ? String.fromCharCode(byte) : '\\x' + byte.toString(16).toUpperCase().padStart(2, '0');
+    }
+    return str;
+  }
+  function appendReceived(text, byteCount) {
+    const area = el('received');
+    area.value += text;
+    area.scrollTop = area.scrollHeight;
+    totalReceived += byteCount;
+    el('bytesReceived').textContent = totalReceived + ' bytes received';
+    el('lastReceived').textContent = 'Last received at ' + new Date().toLocaleTimeString();
+  }
+  function onNotification(event) {
+    if (!event.target.value) return;
+    const view = event.target.value;
+    const bytes = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
+    appendReceived(readBytes(bytes), bytes.length);
+  }
+  function clearConnection() {
+    if (notifyCharacteristic) notifyCharacteristic.removeEventListener('characteristicvaluechanged', onNotification);
+    notifyCharacteristic = null;
+    writeCharacteristic = null;
+    server = null;
+    const previous = currentDevice;
+    currentDevice = null;
+    if (previous && previous.gatt && previous.gatt.connected) previous.gatt.disconnect();
+    if (!inDemo) setStatus('Disconnected');
+    refreshButtons();
+  }
+  function onUnexpectedDisconnect(event) {
+    if (event.target !== currentDevice) return;
+    clearConnection();
+    notice('Bluetooth device disconnected.', 'error');
+  }
+  function exitDemo() {
+    inDemo = false;
+    setStatus('Disconnected');
+    refreshButtons();
+  }
+  el('demo').addEventListener('click', function () {
+    if (inDemo) {
+      exitDemo();
+      notice('Demo ended.');
+    } else {
+      clearConnection();
+      inDemo = true;
+      setStatus('Demo connected', 'demo');
+      notice('Demo mode enabled. Type a message and select Send.', 'ok');
+      refreshButtons();
+    }
+  });
+  el('scan').addEventListener('click', async function () {
+    if (!navigator.bluetooth) {
+      notice('Web Bluetooth is unavailable. Use Chrome or Edge on HTTPS, or select Try demo.', 'error');
+      return;
+    }
+    const serviceId = el('serviceUuid').value.trim();
+    if (!serviceId) {
+      notice('Enter a BLE service UUID before scanning.', 'error');
+      return;
+    }
+    if (inDemo) exitDemo();
+    try {
+      // Must run as a direct consequence of a user click to open the system device chooser.
+      const device = await navigator.bluetooth.requestDevice({
+        // The browser filters advertised GATT services before showing candidates.
+        // The device may have any name, but it must advertise the selected UART service.
+        filters: [{ services: [serviceId] }]
+      });
+      if (isLive() && currentDevice.id !== device.id) clearConnection();
+      selectedDevice = device;
+      notice('Selected ' + (device.name || 'MechSoul device') + '. Select Connect to continue.', 'ok');
+      refreshButtons();
+    } catch (error) {
+      if (error.name !== 'NotFoundError') notice('Scan failed: ' + errorMessage(error), 'error');
+      else notice('No device selected.');
+    }
+  });
+  el('connect').addEventListener('click', async function () {
+    if (isLive()) {
+      clearConnection();
+      notice('Disconnected.');
+      return;
+    }
+    const chosen = selectedDevice;
+    if (!chosen) return;
+    if (inDemo) exitDemo();
+    el('connect').disabled = true;
+    setStatus('Connecting…', 'connecting');
+    notice('Connecting to ' + (chosen.name || 'device') + '…');
+    try {
+      currentDevice = chosen;
+      chosen.removeEventListener('gattserverdisconnected', onUnexpectedDisconnect);
+      chosen.addEventListener('gattserverdisconnected', onUnexpectedDisconnect);
+      server = await chosen.gatt.connect();
+      const service = await server.getPrimaryService(el('serviceUuid').value.trim());
+      writeCharacteristic = await service.getCharacteristic(el('writeUuid').value.trim());
+      notifyCharacteristic = await service.getCharacteristic(el('notifyUuid').value.trim());
+      notifyCharacteristic.addEventListener('characteristicvaluechanged', onNotification);
+      await notifyCharacteristic.startNotifications();
+      setStatus('Connected: ' + (chosen.name || 'device'), 'connected');
+      notice('Ready to send and receive ASCII.', 'ok');
+    } catch (error) {
+      clearConnection();
+      notice('Connection failed: ' + errorMessage(error) + '. Check the GATT UUIDs and firmware.', 'error');
+    } finally {
+      refreshButtons();
+    }
+  });
+  el('send').addEventListener('click', sendText);
+  el('outgoing').addEventListener('keydown', function (event) {
+    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+      event.preventDefault();
+      sendText();
+    }
+  });
+  async function sendText() {
+    if (sending) return;
+    const original = el('outgoing').value;
+    const message = original + (el('appendNewline').checked ? '\n' : '');
+    if (!message) return notice('Enter a message to send.', 'error');
+    if (!/^[\x00-\x7f]*$/.test(message)) return notice('Only ASCII (0–127) is allowed. Remove non-ASCII characters before sending.', 'error');
+    if (!inDemo && !isLive()) return notice('Connect to a Bluetooth device or enable demo mode.', 'error');
+    if (inDemo) {
+      notice('Demo sent ' + message.length + ' ASCII bytes.', 'ok');
+      window.setTimeout(function () {
+        if (inDemo) appendReceived('ACK: ' + original.replace(/\r?\n/g, ' ') + '\r\n', original.length + 7);
+      }, 300);
+      return;
+    }
+    sending = true;
+    refreshButtons();
+    try {
+      const bytes = new TextEncoder().encode(message);
+      for (let i = 0; i < bytes.length; i += 20) {
+        if (!isLive()) throw new Error('Device disconnected while sending.');
+        const chunk = bytes.slice(i, i + 20);
+        if (writeCharacteristic.properties.write) await writeCharacteristic.writeValueWithResponse(chunk);
+        else if (writeCharacteristic.properties.writeWithoutResponse) await writeCharacteristic.writeValueWithoutResponse(chunk);
+        else throw new Error('This BLE characteristic cannot be written to.');
+      }
+      notice('Sent ' + bytes.length + ' ASCII bytes.', 'ok');
+    } catch (error) {
+      notice('Send failed: ' + errorMessage(error), 'error');
+    } finally {
+      sending = false;
+      refreshButtons();
+    }
+  }
+  el('clearSend').addEventListener('click', function () {
+    el('outgoing').value = '';
+    updateCount();
+    notice('');
+    el('outgoing').focus();
+  });
+  el('clearRx').addEventListener('click', function () {
+    el('received').value = '';
+    totalReceived = 0;
+    el('lastReceived').textContent = 'Waiting for data';
+    el('bytesReceived').textContent = '0 bytes received';
+  });
+  el('copy').addEventListener('click', async function () {
+    try {
+      await navigator.clipboard.writeText(el('received').value);
+      notice('Received text copied.', 'ok');
+    } catch (error) {
+      notice('Copy unavailable: ' + errorMessage(error), 'error');
+    }
+  });
+  el('outgoing').addEventListener('input', updateCount);
+  if (!navigator.bluetooth) {
+    el('browserTip').textContent = 'Web Bluetooth is not supported in this browser. Try Chrome/Edge on HTTPS for hardware access, or use Try demo.';
+  }
+  updateCount();
+  refreshButtons();
+})();
+</script>
+</body>
+</html>
