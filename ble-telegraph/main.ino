@@ -165,10 +165,11 @@ BLEServiceUART mechSoulControl;
 
 String receivedMessage;
 String morseBuffer;
-String decodedMessage;
+bool hasDecodedCharacterInMessage = false;
 
-// Raw input events update the web indicator; character events clear its
-// current Morse buffer once the firmware has decoded the symbol sequence.
+// Buffer snapshots synchronize the in-progress UI field. Only completed
+// characters are sent as ordinary BLE text records.
+void reportMorseBuffer();
 void reportMorseCharacter(char character);
 
 // -----------------------------------------------------------------------------
@@ -303,37 +304,34 @@ void finishMorseCharacter()
     return;
   }
 
-  const char character = characterFromMorse(morseBuffer);
+  const String completedCode = morseBuffer;
+  const char character = characterFromMorse(completedCode);
+
+  // Clear the temporary symbol buffer as soon as the character is decoded.
+  morseBuffer = "";
   reportMorseCharacter(character);
+  hasDecodedCharacterInMessage = true;
 
   Serial.print("Morse ");
-  Serial.print(morseBuffer);
+  Serial.print(completedCode);
   Serial.print(" -> ");
   Serial.println(character);
-
-  if (decodedMessage.length() < MAX_MESSAGE_LENGTH) {
-    decodedMessage += character;
-  }
-
-  morseBuffer = "";
 }
 
 void appendWordSpace()
 {
-  if (decodedMessage.length() == 0 ||
-      decodedMessage[decodedMessage.length() - 1] == ' ') {
+  if (!hasDecodedCharacterInMessage) {
     return;
   }
 
-  if (decodedMessage.length() < MAX_MESSAGE_LENGTH) {
-    decodedMessage += ' ';
-  }
+  // A word separator is also a decoded character in the BLE text stream.
+  reportMorseCharacter(' ');
 }
 
 void resetMorseInput()
 {
   morseBuffer = "";
-  decodedMessage = "";
+  hasDecodedCharacterInMessage = false;
   hasLastButtonRelease = false;
   lastButtonReleaseMs = 0;
 }
@@ -341,16 +339,7 @@ void resetMorseInput()
 void finishMorseMessage()
 {
   finishMorseCharacter();
-
-  if (decodedMessage.length() > 0) {
-    Serial.print("Decoded Button A message: ");
-    Serial.println(decodedMessage);
-
-    // The browser's Nordic UART RX characteristic receives this line.
-    mechSoulControl.println(decodedMessage.c_str());
-    mechSoulControl.flush();
-  }
-
+  Serial.println("Button A Morse message complete.");
   resetMorseInput();
 }
 
@@ -374,20 +363,19 @@ void onButtonAPressed(uint32_t now)
   buttonAPressStartMs = now;
 }
 
-// Prefix symbol events with ASCII Record Separator so the browser can
-// distinguish raw keying feedback from decoded message text.
-void reportMorseSymbol(char symbol)
+// Send a snapshot of the temporary input buffer for the browser's live UI.
+// This is a UI synchronization record, not decoded text for the terminal.
+void reportMorseBuffer()
 {
-  const char event[] = {'\x1E', 'M', 'O', 'R', 'S', 'E', ':', symbol, '\0'};
-  mechSoulControl.println(event);
+  const String event = String("\x1E" "BUFFER:") + morseBuffer;
+  mechSoulControl.println(event.c_str());
   mechSoulControl.flush();
 }
 
-// A completed character tells the browser to clear the in-progress Morse line.
+// Send only the translated character as an ordinary Nordic UART text record.
 void reportMorseCharacter(char character)
 {
-  const char event[] = {'\x1E', 'C', 'H', 'A', 'R', ':', character, '\0'};
-  mechSoulControl.println(event);
+  mechSoulControl.println(character);
   mechSoulControl.flush();
 }
 
@@ -399,7 +387,7 @@ void onButtonAReleased(uint32_t now)
 
   if (morseBuffer.length() < MAX_MORSE_SYMBOLS) {
     morseBuffer += symbol;
-    reportMorseSymbol(symbol);
+    reportMorseBuffer();
   }
 
   lastButtonReleaseMs = now;
