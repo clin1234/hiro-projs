@@ -223,8 +223,7 @@ footer{text-align:center;color:#7989a1;font-size:.81rem;line-height:1.7;padding:
     }
     setMorseIndicator('pause', description);
   }
-  function appendMorseSymbol(symbol) {
-    el('morseInputLine').value += symbol;
+  function showMorseSymbol(symbol) {
     const state = symbol === '.' ? 'dit' : 'dah';
     setMorseIndicator(state, symbol === '.' ? 'Dit received.' : 'Dah received.');
 
@@ -237,29 +236,40 @@ footer{text-align:center;color:#7989a1;font-size:.81rem;line-height:1.7;padding:
     }, MORSE_INDICATOR_FLASH_MS);
   }
   function processIncomingLine(line, byteCount) {
-    // Record-separator + MORSE marks a raw Button A keying event.
-    // Record-separator + CHAR marks a completed Morse character.
-    const morsePrefix = '\x1EMORSE:';
-    if (line.startsWith(morsePrefix)) {
-      const symbol = line.slice(morsePrefix.length);
-      if (symbol === '.' || symbol === '-') {
-        appendMorseSymbol(symbol);
+    // BUFFER is a UI-only snapshot of the Pico's temporary Morse buffer.
+    // It is never appended to the decoded-text terminal.
+    const bufferPrefix = '\x1EBUFFER:';
+    if (line.startsWith(bufferPrefix)) {
+      const buffer = line.slice(bufferPrefix.length);
+      if (!/^[.-]{0,8}$/.test(buffer)) {
         return;
       }
+
+      const field = el('morseInputLine');
+      const previousBuffer = field.value;
+      field.value = buffer;
+
+      // Only flash a signal for a newly appended symbol. A fresh connection
+      // may first receive a snapshot containing more than one buffered mark.
+      if (buffer.length > previousBuffer.length &&
+          buffer.startsWith(previousBuffer)) {
+        showMorseSymbol(buffer[buffer.length - 1]);
+      }
+      return;
     }
 
-    const characterPrefix = '\x1ECHAR:';
-    if (line.startsWith(characterPrefix)) {
-      const character = line.slice(characterPrefix.length);
-      if (character.length === 1) {
-        el('morseInputLine').value = '';
-        returnMorseIndicatorToPause(
-          character === '['
-            ? 'Unknown Morse sequence translated; input cleared.'
-            : 'Character ' + character + ' decoded; input cleared.'
-        );
-        return;
-      }
+    // Each ordinary one-character UART record is a completed translated
+    // character. It is the only Morse content written to the text terminal.
+    if (line.length === 1) {
+      const character = line;
+      appendReceived(character, 1);
+      el('morseInputLine').value = '';
+      returnMorseIndicatorToPause(
+        character === ' '
+          ? 'Word space decoded; Morse buffer cleared.'
+          : 'Character ' + character + ' decoded; Morse buffer cleared.'
+      );
+      return;
     }
 
     appendReceived(line + '\n', byteCount);
