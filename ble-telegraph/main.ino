@@ -181,7 +181,6 @@ uint32_t buttonALastRawChangeMs = 0;
 uint32_t buttonAPressStartMs = 0;
 uint32_t lastButtonReleaseMs = 0;
 bool hasLastButtonRelease = false;
-bool wordSpaceAddedForCurrentGap = false;
 
 // Forward declarations used while the RGB LED transmitter is active.
 void updateButtonA(uint32_t now);
@@ -334,7 +333,6 @@ void resetMorseInput()
   morseBuffer = "";
   hasDecodedCharacterInMessage = false;
   hasLastButtonRelease = false;
-  wordSpaceAddedForCurrentGap = false;
   lastButtonReleaseMs = 0;
 }
 
@@ -353,15 +351,11 @@ void onButtonAPressed(uint32_t now)
     if (gap >= MESSAGE_TIMEOUT_MS) {
       // A new press after the timeout starts a new message.
       finishMorseMessage();
-    } else {
-      if (gap >= LETTER_GAP_MS) {
-        finishMorseCharacter();
-      }
-
-      if (gap >= WORD_GAP_MS && !wordSpaceAddedForCurrentGap) {
-        appendWordSpace();
-        wordSpaceAddedForCurrentGap = true;
-      }
+    } else if (gap >= WORD_GAP_MS) {
+      finishMorseCharacter();
+      appendWordSpace();
+    } else if (gap >= LETTER_GAP_MS) {
+      finishMorseCharacter();
     }
     // Shorter gaps remain within the current character.
   }
@@ -398,7 +392,6 @@ void onButtonAReleased(uint32_t now)
 
   lastButtonReleaseMs = now;
   hasLastButtonRelease = true;
-  wordSpaceAddedForCurrentGap = false;
 
   Serial.print(symbol == '.' ? "Dit: " : "Dah: ");
   Serial.println(morseBuffer);
@@ -453,11 +446,7 @@ void processMorseTimeout(uint32_t now)
     finishMorseCharacter();
   }
 
-  // A 7-dit pause separates words. Insert the space only once per gap.
-  if (gap >= WORD_GAP_MS && !wordSpaceAddedForCurrentGap) {
-    appendWordSpace();
-    wordSpaceAddedForCurrentGap = true;
-  }
+
 }
 
 // -----------------------------------------------------------------------------
