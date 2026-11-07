@@ -36,7 +36,7 @@ Button A is a single-button Morse key. A press is classified when the button is 
 - Press of **2 dits or longer**: dah (`-`).
 - Release-to-next-press gap of **1 dit**: another symbol in the same character.
 - After a gap of **3 dits**, finalize and transmit the current character, then clear the Morse symbol buffer.
-- After a gap of **7 dits**, insert one word-space character.
+- If the next press begins after a gap of **7 dits or longer**, insert one word-space character (but do not add a trailing space when the message simply ends).
 - No new press for **15 dits**: finish the message and reset its state; completed characters have already been transmitted individually.
 
 The default `DIT_TIME_MS` is 100 ms. Change this one constant to suit the operator; keep it fixed during a message. The same timing unit is used for the RGB LED Morse output. A 25 ms debounce is applied to Button A. Button A continues to be sampled while the RGB LED is playing a BLE message.
@@ -49,6 +49,6 @@ The sketch exposes the Nordic UART Service through `BLEServiceUART`.
 
 - Text received over BLE, terminated by CR or LF, is flashed with the RGB LED: red for a dit, blue for a dah, and green when playback completes.
 - Button A keeps its current character's dits/dahs in the temporary `morseBuffer`. After each accepted symbol, the firmware sends a Record-Separator-prefixed `BUFFER:` snapshot so the web page can mirror that buffer in its single-line field. These snapshots are UI synchronization metadata, not decoded text.
-- When a 3-dit letter gap is reached, the firmware translates the buffered pattern, clears `morseBuffer`, and sends only the translated character as an ordinary one-character Nordic UART text record. A 7-dit gap sends a translated space. No accumulated message is retransmitted at the 15-dit timeout.
+- When a 3-dit letter gap is reached, the firmware translates the buffered pattern, clears `morseBuffer`, and sends only the translated character as an ordinary one-character Nordic UART text record. A new press after a 7-dit gap sends a translated space; a message that simply ends does not gain a trailing space. No accumulated message is retransmitted at the 15-dit timeout.
 - The collapsed **Received dits and dahs** panel in `index.html` mirrors the firmware's temporary buffer. Its indicator flashes red for a dit, blue for a dah, and green during pauses. When a translated character arrives, the web page appends it to the received-text terminal and clears the matching buffer field.
 
