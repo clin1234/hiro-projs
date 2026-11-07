@@ -44,7 +44,7 @@ constexpr uint8_t SERVO_RBL_PIN = 10;
 //   - release-to-next-press gap of 1 dit: next symbol in the same character
 //   - gap of at least 3 dits: next character
 //   - gap of at least 7 dits: next word
-//   - no new press for 15 dits: finish and send the decoded message
+//   - no new press for 15 dits: finish and reset the message state
 //
 // Tune DIT_TIME_MS to the operator. Keep it constant for a whole message.
 // LED output uses the same unit so the input and output rhythms stay aligned.
@@ -445,8 +445,6 @@ void processMorseTimeout(uint32_t now)
   if (gap >= LETTER_GAP_MS) {
     finishMorseCharacter();
   }
-
-
 }
 
 // -----------------------------------------------------------------------------
@@ -493,7 +491,7 @@ void setup()
   Serial.println("BLE text followed by Enter flashes as RGB Morse.");
   Serial.println("Button A: short press = dit; hold >= 2 dits = dah.");
   Serial.println("Use 1-dit symbol gaps, 3-dit letter gaps, and 7-dit word gaps.");
-  Serial.println("Button A message is sent after 15 dits of inactivity.");
+  Serial.println("Button A message state resets after 15 dits of inactivity.");
 }
 
 // -----------------------------------------------------------------------------
