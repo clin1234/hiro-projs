@@ -48,8 +48,7 @@ The decoder uses the same `MORSE_TABLE` as the LED transmitter. Character-to-Mor
 The sketch exposes the Nordic UART Service through `BLEServiceUART`.
 
 - Text received over BLE, terminated by CR or LF, is flashed with the RGB LED: red for a dit, blue for a dah, and green when playback completes.
-- Every accepted Button A dit/dah is sent immediately over the Nordic UART TX characteristic as a line containing the ASCII Record Separator (0x1E), `MORSE:`, and the symbol (`.` or `-`).
-- When the firmware translates the buffered symbols into a character, it sends a second event line containing the Record Separator, `CHAR:`, and the decoded character. The web page uses this event to clear the current Morse sequence field. Unknown sequences send the firmware's `[` fallback character as the same event.
-- Morse entered with Button A is decoded and sent back over the Nordic UART TX characteristic after 15 dits of inactivity.
-- The collapsed **Received dits and dahs** panel in `index.html` contains a colored signal button (red for dit, blue for dah, green for pause) and a single-line field showing the current character's Morse sequence. The signal button briefly shows each received symbol before returning to its pause color.
+- Button A keeps its current character's dits/dahs in the temporary `morseBuffer`. For the live web display, the firmware sends a separate Record-Separator-prefixed `BUFFER:` snapshot after each accepted symbol; this is UI state, not decoded text.
+- When the character is finalized, the firmware translates it, clears `morseBuffer`, and sends only that translated character as an ordinary one-character Nordic UART text record. The web page appends that character to the received-text terminal and clears its matching input field. Word gaps are sent as a translated space. The full message is not retransmitted at the 15-dit timeout.
+- The collapsed **Received dits and dahs** panel in `index.html` mirrors the firmware buffer in a single-line field. Its indicator flashes red for a dit, blue for a dah, and green during pauses.
 
