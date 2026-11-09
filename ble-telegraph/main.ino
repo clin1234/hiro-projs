@@ -290,7 +290,7 @@ void transmitMessage(const String &message)
   delayWithButtonPolling(END_FLASH_TIME_MS);
   allOff();
 
-  mechSoulControl.println("Transmission complete.");
+  // mechSoulControl.println("Transmission complete.");
   mechSoulControl.flush();
   Serial.println("Transmission complete.");
 }
