@@ -99,14 +99,14 @@ footer{text-align:center;color:#7989a1;font-size:.81rem;line-height:1.7;padding:
 </div>
 <p class="tips" id="browserTip">
   <strong>Scan</strong> shows only BLE devices advertising the configured Nordic UART Service UUID, regardless of device name.
-  <strong>Append LF</strong> is enabled for line-delimited messages.
+  Enter ends each message with a line feed. <strong>Append LF</strong> controls the Send button.
 </p>
 </div>
 </section>
 <section class="card panel">
 <div class="section-header"><div class="heading"><span class="section-icon" aria-hidden="true">↗</span><div><h2>Send text to Bluetooth device</h2><p class="panel-description">Only 7-bit ASCII characters (0–127) are sent to the Pico and flashed using the RGB LED.</p></div></div><span class="hint">ASCII only</span></div>
-<label class="field-label" for="outgoing">Editable outgoing message</label>
-<textarea id="outgoing" spellcheck="false" autocapitalize="off" autocomplete="off" placeholder="Type ASCII text here...&#10;Example: HELLO, DEVICE!"></textarea>
+<label class="field-label" for="outgoing">Outgoing message (Enter to send, Shift+Enter for a new line)</label>
+<textarea id="outgoing" enterkeyhint="send" spellcheck="false" autocapitalize="off" autocomplete="off" placeholder="Type ASCII text here...&#10;Example: HELLO, DEVICE!"></textarea>
 <div class="send-row">
 <div class="send-tools"><label class="check"><input type="checkbox" id="appendNewline" checked> Append LF (\n)</label><span id="charCount">0 characters</span></div>
 <div class="actions"><button class="muted" type="button" id="clearSend">Clear</button><button class="primary" type="button" id="send" disabled>➤ &nbsp;Send</button></div>
@@ -319,7 +319,7 @@ footer{text-align:center;color:#7989a1;font-size:.81rem;line-height:1.7;padding:
       clearConnection();
       inDemo = true;
       setStatus('Demo connected', 'demo');
-      notice('Demo mode enabled. Type a message and select Send.', 'ok');
+      notice('Demo mode enabled. Type a message and press Enter.', 'ok');
       refreshButtons();
     }
   });
@@ -381,20 +381,26 @@ footer{text-align:center;color:#7989a1;font-size:.81rem;line-height:1.7;padding:
       refreshButtons();
     }
   });
-  el('send').addEventListener('click', sendText);
+  el('send').addEventListener('click', () => sendText());
   el('outgoing').addEventListener('keydown', function (event) {
-    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
-      event.preventDefault();
-      sendText();
-    }
+    if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
+    event.preventDefault();
+    if (!event.repeat) sendText({ submitLine: true });
   });
-  async function sendText() {
-    if (sending) return;
-    const original = el('outgoing').value;
-    const message = original + (el('appendNewline').checked ? '\n' : '');
+  async function sendText({ submitLine = false } = {}) {
+    if (sending) return notice('Send in progress. Try again when it finishes.');
+    const outgoing = el('outgoing');
+    const original = outgoing.value;
+    if (submitLine && !original) return;
+    const appendLF = submitLine ? !original.endsWith('\n') : el('appendNewline').checked;
+    const message = original + (appendLF ? '\n' : '');
     if (!message) return notice('Enter a message to send.', 'error');
     if (!/^[\x00-\x7f]*$/.test(message)) return notice('Only ASCII (0–127) is allowed. Remove non-ASCII characters before sending.', 'error');
     if (!inDemo && !isLive()) return notice('Connect to a Bluetooth device or enable demo mode.', 'error');
+    if (submitLine) {
+      outgoing.value = '';
+      updateCount();
+    }
     if (inDemo) {
       notice('Demo sent ' + message.length + ' ASCII bytes.', 'ok');
       window.setTimeout(function () {
@@ -415,6 +421,10 @@ footer{text-align:center;color:#7989a1;font-size:.81rem;line-height:1.7;padding:
       }
       notice('Sent ' + bytes.length + ' ASCII bytes.', 'ok');
     } catch (error) {
+      if (submitLine) {
+        outgoing.value = original + outgoing.value;
+        updateCount();
+      }
       notice('Send failed: ' + errorMessage(error), 'error');
     } finally {
       sending = false;
